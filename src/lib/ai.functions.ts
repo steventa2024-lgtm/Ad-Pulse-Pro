@@ -9,6 +9,13 @@ const BusinessSchema = z.object({
   tone: z.string(),
 });
 
+const BrandSchema = z.object({
+  brandName: z.string(),
+  primaryColor: z.string(),
+  secondaryColor: z.string(),
+  fontPairing: z.string(),
+});
+
 const SlotSchema = z.object({
   time: z.string(),
   goal: z.string(),
@@ -19,6 +26,7 @@ const SlotSchema = z.object({
 const GenerateCopyInput = z.object({
   business: BusinessSchema,
   slot: SlotSchema,
+  brand: BrandSchema.optional(),
 });
 
 export const generateAdCopy = createServerFn({ method: "POST" })
@@ -27,7 +35,11 @@ export const generateAdCopy = createServerFn({ method: "POST" })
     const { default: OpenAI } = await import("openai");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const { business, slot } = data;
+    const { business, slot, brand } = data;
+
+    const brandBlock = brand?.brandName
+      ? `\nBrand display name (use as the brand reference; do not repeat the business name if identical): ${brand.brandName}`
+      : "";
 
     const prompt = `You are an elite direct-response social media ad copywriter.
 
@@ -35,25 +47,25 @@ Business: ${business.name}
 Niche: ${business.niche || "general"}
 Target audience: ${business.audience || "general consumers"}
 Current offer: ${business.offer || "no specific offer"}
-Brand tone: ${business.tone || "Friendly"}
+Brand tone: ${business.tone || "Friendly"}${brandBlock}
 
 Post slot: ${slot.channel} at ${slot.time}
 Goal: ${slot.goal}
 Angle hint: ${slot.focus}
 
 HARD RULES:
-- Use SPECIFIC niche language. Reference the actual product/service (e.g. "your lawn", "your morning coffee", "your skincare routine") — NEVER generic filler like "elevate your everyday moments", "unlock your potential", "transform your life".
+- Use SPECIFIC niche language. Reference the actual product/service. NEVER generic filler.
 - Every sentence must be specific to THIS business, THIS niche, THIS audience.
 - Match the goal exactly:
   - Engagement → ask a targeted, niche-specific question. No hard sell.
   - Conversion → lead with the offer + deadline + a direct CTA.
   - Trust → social proof, review quote, or before/after proof.
-- Do not start with "Are you..." more than once across the batch.
+- Do NOT mention hex colors, font names, or design terms in the headline.
 
 Return STRICT JSON only:
 {
-  "title": "punchy ad headline, 1-2 sentences, under 110 chars, ends with a clear CTA, uses niche-specific language",
-  "imagePrompt": "detailed visual description for the ad background. MUST visibly relate to ${business.niche} — describe specific subject/scene/objects (not vague 'person smiling'), color palette, mood, camera angle, lighting. NO TEXT, no watermarks. Under 320 chars."
+  "title": "punchy ad headline, 1-2 sentences, under 110 chars, ends with a clear CTA",
+  "imagePrompt": "detailed visual description for the ad background. MUST visibly relate to ${business.niche}. Describe specific subject/scene/objects, color palette, mood, camera angle, lighting. NO TEXT. Under 320 chars."
 }`;
 
     const completion = await client.chat.completions.create({
@@ -76,6 +88,7 @@ Return STRICT JSON only:
 const GenerateImageInput = z.object({
   prompt: z.string(),
   business: BusinessSchema,
+  brand: BrandSchema.optional(),
 });
 
 export const generateAdImage = createServerFn({ method: "POST" })
@@ -84,15 +97,20 @@ export const generateAdImage = createServerFn({ method: "POST" })
     const { default: OpenAI } = await import("openai");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const { business, prompt } = data;
+    const { business, prompt, brand } = data;
+
+    const brandPalette = brand?.primaryColor
+      ? `\nBrand palette (art direction only — do not replace the subject with abstract color fields):\n  Primary mood color: ${brand.primaryColor}\n  Secondary mood color: ${brand.secondaryColor}\nUse a lighting and color mood compatible with these tones.`
+      : "";
 
     const fullPrompt = `Advertising flyer background image.
 
 Context: This ad is for a ${business.niche || "small"} business called ${business.name}, targeting ${business.audience || "local customers"}. Current offer: ${business.offer || "none"}.
+${brandPalette}
 
 Visual brief: ${prompt}
 
-Requirements: no text, no watermark, no letters, high quality, social-media-ready, eye-catching composition, subject visibly related to the niche.`;
+Requirements: no text, no watermark, no letters, high quality, social-media-ready, eye-catching composition, subject visibly related to the niche. Keep the subject clearly recognizable.`;
 
     const response = await client.images.generate({
       model: "gpt-image-1",

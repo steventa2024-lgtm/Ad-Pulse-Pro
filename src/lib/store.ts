@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { get, set, del } from "idb-keyval";
+import { DEFAULT_BRAND, type BrandKit } from "./brand";
 
 export type ChannelId = "facebook" | "instagram" | "tiktok";
 
@@ -22,14 +23,16 @@ export interface BusinessProfile {
 
 export interface GeneratedPost {
   id: string;
-  image: string; // composited image (text overlay)
-  bgImage?: string; // raw AI background, kept for re-compositing on edit
+  image: string;
+  bgImage?: string;
   title: string;
   goal: string;
   time: string;
   channel: ChannelId;
   status: "draft" | "scheduled" | "posted";
   createdAt: number;
+  /** Brand kit captured at generation time. Absent on pre-Phase-5 posts. */
+  brandSnapshot?: BrandKit;
 }
 
 const DEFAULT_CHANNELS: ConnectedChannel[] = [
@@ -46,6 +49,7 @@ interface AppState {
   autopilotOn: boolean;
   posts: GeneratedPost[];
   lastGenerationAt: number | null;
+  brand: BrandKit;
 
   setOnboardingStep: (n: number) => void;
   completeOnboarding: () => void;
@@ -56,6 +60,8 @@ interface AppState {
   updatePost: (id: string, patch: Partial<GeneratedPost>) => void;
   markPostStatus: (id: string, status: GeneratedPost["status"]) => void;
   setLastGenerationAt: (t: number) => void;
+  updateBrand: (patch: Partial<BrandKit>) => void;
+  clearBrand: () => void;
   reset: () => void;
 }
 
@@ -79,6 +85,7 @@ export const useAppStore = create<AppState>()(
       autopilotOn: true,
       posts: [],
       lastGenerationAt: null,
+      brand: DEFAULT_BRAND,
 
       setOnboardingStep: (n) => set({ onboardingStep: n }),
       completeOnboarding: () => set({ onboardingComplete: true }),
@@ -103,6 +110,11 @@ export const useAppStore = create<AppState>()(
       markPostStatus: (id, status) =>
         set((s) => ({ posts: s.posts.map((p) => (p.id === id ? { ...p, status } : p)) })),
       setLastGenerationAt: (t) => set({ lastGenerationAt: t }),
+
+      updateBrand: (patch) => set((s) => ({ brand: { ...s.brand, ...patch, configured: true } })),
+
+      clearBrand: () => set({ brand: DEFAULT_BRAND }),
+
       reset: () =>
         set({
           onboardingStep: 1,
@@ -112,12 +124,23 @@ export const useAppStore = create<AppState>()(
           autopilotOn: true,
           posts: [],
           lastGenerationAt: null,
+          brand: DEFAULT_BRAND,
         }),
     }),
     {
       name: "pulseboard-app-idb",
-      version: 2,
+      version: 3,
       storage: idbStorage,
+      migrate: (persisted: unknown, version: number) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        if (version < 3) {
+          return {
+            ...state,
+            brand: { ...DEFAULT_BRAND, ...(state.brand as object | undefined) },
+          };
+        }
+        return state as never;
+      },
     },
   ),
 );

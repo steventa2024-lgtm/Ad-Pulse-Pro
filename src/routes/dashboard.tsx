@@ -12,10 +12,12 @@ import {
   CircleDot,
   Eye,
   LayoutGrid,
+  Palette,
 } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useAppStore, type GeneratedPost } from "@/lib/store";
 import { generateDailyPostsAI, composeAdImage, type GenerationProgress } from "@/lib/generator";
+import { DEFAULT_BRAND } from "@/lib/brand";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/dashboard")({
 
 function Dashboard() {
   const business = useAppStore((s) => s.business);
+  const brand = useAppStore((s) => s.brand);
   const channels = useAppStore((s) => s.channels);
   const posts = useAppStore((s) => s.posts);
   const autopilotOn = useAppStore((s) => s.autopilotOn);
@@ -74,6 +77,7 @@ function Dashboard() {
     try {
       const generated = await generateDailyPostsAI(
         business,
+        brand,
         (p) => setProgress(p),
         3,
         initialStatus,
@@ -113,7 +117,11 @@ function Dashboard() {
     let nextImage = prevImage;
     if (post.bgImage) {
       try {
-        nextImage = await composeAdImage(post.bgImage, trimmed, "#6366f1");
+        nextImage = await composeAdImage(
+          post.bgImage,
+          trimmed,
+          post.brandSnapshot ?? DEFAULT_BRAND,
+        );
         updatePost(post.id, { image: nextImage });
       } catch {
         /* keep old composite */
@@ -386,6 +394,12 @@ function Header({
               <span className="max-w-[40vw] truncate text-[12px] font-semibold text-muted-foreground">
                 {businessName}
               </span>
+              <Link
+                to="/settings"
+                className="focus-ring hidden shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10.5px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:inline-flex"
+              >
+                <Palette className="size-3" /> Brand kit
+              </Link>
             </>
           )}
         </div>
