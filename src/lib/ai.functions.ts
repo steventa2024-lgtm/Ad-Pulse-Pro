@@ -13,12 +13,12 @@ const SlotSchema = z.object({
   time: z.string(),
   goal: z.string(),
   channel: z.enum(["facebook", "instagram", "tiktok"]),
+  focus: z.string(),
 });
 
 const GenerateCopyInput = z.object({
   business: BusinessSchema,
   slot: SlotSchema,
-  previousTitles: z.array(z.string()).default([]),
 });
 
 export const generateAdCopy = createServerFn({ method: "POST" })
@@ -27,13 +27,9 @@ export const generateAdCopy = createServerFn({ method: "POST" })
     const { default: OpenAI } = await import("openai");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const { business, slot, previousTitles } = data;
+    const { business, slot } = data;
 
-    const avoidBlock = previousTitles.length
-      ? `\nAlready-used headlines for this batch — DO NOT reuse wording, structure, or angle:\n${previousTitles.map((t) => `- ${t}`).join("\n")}\n`
-      : "";
-
-    const prompt = `You are an expert social media ad copywriter for small businesses.
+    const prompt = `You are an elite direct-response social media ad copywriter.
 
 Business: ${business.name}
 Niche: ${business.niche || "general"}
@@ -41,17 +37,23 @@ Target audience: ${business.audience || "general consumers"}
 Current offer: ${business.offer || "no specific offer"}
 Brand tone: ${business.tone || "Friendly"}
 
-This post is scheduled for ${slot.channel} at ${slot.time}, with the goal of: ${slot.goal}
+Post slot: ${slot.channel} at ${slot.time}
+Goal: ${slot.goal}
+Angle hint: ${slot.focus}
 
-SLOT ANGLE (must match the goal):
-- Engagement → ask a provocative question, teaser, or invite a comment. No hard sell.
-- Conversion → lead with a specific offer, deadline, or scarcity. Direct CTA.
-- Trust → social proof, review quote, before/after, or authority claim.
-${avoidBlock}
-Write ONE ad post. Return strict JSON only:
+HARD RULES:
+- Use SPECIFIC niche language. Reference the actual product/service (e.g. "your lawn", "your morning coffee", "your skincare routine") — NEVER generic filler like "elevate your everyday moments", "unlock your potential", "transform your life".
+- Every sentence must be specific to THIS business, THIS niche, THIS audience.
+- Match the goal exactly:
+  - Engagement → ask a targeted, niche-specific question. No hard sell.
+  - Conversion → lead with the offer + deadline + a direct CTA.
+  - Trust → social proof, review quote, or before/after proof.
+- Do not start with "Are you..." more than once across the batch.
+
+Return STRICT JSON only:
 {
-  "title": "punchy ad headline, 1-2 sentences max, under 110 chars, ends with a clear CTA",
-  "imagePrompt": "vivid visual description for an eye-catching advertising flyer background. Specify style, subject, color palette, mood, composition. NO TEXT in the image. Under 350 chars."
+  "title": "punchy ad headline, 1-2 sentences, under 110 chars, ends with a clear CTA, uses niche-specific language",
+  "imagePrompt": "detailed visual description for the ad background. MUST visibly relate to ${business.niche} — describe specific subject/scene/objects (not vague 'person smiling'), color palette, mood, camera angle, lighting. NO TEXT, no watermarks. Under 320 chars."
 }`;
 
     const completion = await client.chat.completions.create({
@@ -65,11 +67,14 @@ Write ONE ad post. Return strict JSON only:
     const parsed = JSON.parse(raw) as { title?: string; imagePrompt?: string };
     return {
       title: parsed.title ?? "Untitled ad",
-      imagePrompt: parsed.imagePrompt ?? "vibrant abstract gradient, modern, eye-catching",
+      imagePrompt: parsed.imagePrompt ?? `vibrant, modern, eye-catching scene related to ${business.niche || "the product"}`,
     };
   });
 
-const GenerateImageInput = z.object({ prompt: z.string() });
+const GenerateImageInput = z.object({
+  prompt: z.string(),
+  business: BusinessSchema,
+});
 
 export const generateAdImage = createServerFn({ method: "POST" })
   .validator((input: unknown) => GenerateImageInput.parse(input))
@@ -77,9 +82,19 @@ export const generateAdImage = createServerFn({ method: "POST" })
     const { default: OpenAI } = await import("openai");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+    const { business, prompt } = data;
+
+    const fullPrompt = `Advertising flyer background image.
+
+Context: This ad is for a ${business.niche || "small"} business called ${business.name}, targeting ${business.audience || "local customers"}. Current offer: ${business.offer || "none"}.
+
+Visual brief: ${prompt}
+
+Requirements: no text, no watermark, no letters, high quality, social-media-ready, eye-catching composition, subject visibly related to the niche.`;
+
     const response = await client.images.generate({
       model: "gpt-image-1",
-      prompt: `Advertising flyer background image, photorealistic or stylized, no text, no watermark, high quality, social-media-ready, eye-catching composition. ${data.prompt}`,
+      prompt: fullPrompt,
       size: "1024x1024",
       quality: "high",
       n: 1,

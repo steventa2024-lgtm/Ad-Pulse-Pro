@@ -22,7 +22,8 @@ export interface BusinessProfile {
 
 export interface GeneratedPost {
   id: string;
-  image: string;
+  image: string;         // composited image (text overlay)
+  bgImage?: string;      // raw AI background, kept for re-compositing on edit
   title: string;
   goal: string;
   time: string;
@@ -52,12 +53,12 @@ interface AppState {
   setChannelConnected: (id: ChannelId, connected: boolean, handle?: string) => void;
   toggleAutopilot: () => void;
   addPosts: (posts: GeneratedPost[]) => void;
+  updatePost: (id: string, patch: Partial<GeneratedPost>) => void;
   markPostStatus: (id: string, status: GeneratedPost["status"]) => void;
   setLastGenerationAt: (t: number) => void;
   reset: () => void;
 }
 
-// IndexedDB-backed storage — handles MB-sized base64 images fine
 const idbStorage = createJSONStorage(() => ({
   getItem: async (name: string) => (await get(name)) ?? null,
   setItem: async (name: string, value: string) => { await set(name, value); },
@@ -88,6 +89,8 @@ export const useAppStore = create<AppState>()(
         })),
       toggleAutopilot: () => set((s) => ({ autopilotOn: !s.autopilotOn })),
       addPosts: (posts) => set((s) => ({ posts: [...posts, ...s.posts] })),
+      updatePost: (id, patch) =>
+        set((s) => ({ posts: s.posts.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
       markPostStatus: (id, status) =>
         set((s) => ({ posts: s.posts.map((p) => (p.id === id ? { ...p, status } : p)) })),
       setLastGenerationAt: (t) => set({ lastGenerationAt: t }),
@@ -103,8 +106,8 @@ export const useAppStore = create<AppState>()(
         }),
     }),
     {
-      name: "pulseboard-app-idb", // new key — old localStorage entry stays orphaned
-      version: 1,
+      name: "pulseboard-app-idb",
+      version: 2,
       storage: idbStorage,
     },
   ),

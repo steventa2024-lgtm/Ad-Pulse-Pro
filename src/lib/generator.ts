@@ -2,21 +2,17 @@ import type { BusinessProfile, ChannelId, GeneratedPost } from "./store";
 import { generateAdCopy, generateAdImage } from "./ai.functions";
 
 const CHANNELS: ChannelId[] = ["instagram", "facebook", "tiktok"];
-const SLOTS = [
-  { time: "9:00 AM", goal: "Engagement" },
-  { time: "1:30 PM", goal: "Conversion" },
-  { time: "6:00 PM", goal: "Trust" },
-];
 
-function pick<T>(arr: T[], i: number): T {
-  return arr[i % arr.length]!;
-}
+const SLOTS = [
+  { time: "9:00 AM", goal: "Engagement", focus: "Ask the audience a niche-specific question. Spark replies. Zero hard sell." },
+  { time: "1:30 PM", goal: "Conversion", focus: "Lead with the specific offer, add a deadline, end with a strong CTA." },
+  { time: "6:00 PM", goal: "Trust",    focus: "Open with a customer review, social proof, or before/after proof." },
+] as const;
 
 export interface GenerationProgress {
-  index: number;
-  total: number;
   stage: "copy" | "image" | "compose" | "done";
-  title?: string;
+  completed: number;
+  total: number;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -46,8 +42,12 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-/** Composite the AI background with an ad headline overlay. */
-async function composeAdImage(backgroundDataUrl: string, headline: string, accent: string): Promise<string> {
+/** Composite the AI background with an ad headline overlay. Exported for re-compose on edit. */
+export async function composeAdImage(
+  backgroundDataUrl: string,
+  headline: string,
+  accent = "#6366f1",
+): Promise<string> {
   const img = await loadImage(backgroundDataUrl);
   const size = 1024;
   const canvas = document.createElement("canvas");
@@ -58,7 +58,6 @@ async function composeAdImage(backgroundDataUrl: string, headline: string, accen
 
   ctx.drawImage(img, 0, 0, size, size);
 
-  // Bottom gradient for legibility
   const gradient = ctx.createLinearGradient(0, size * 0.45, 0, size);
   gradient.addColorStop(0, "rgba(0,0,0,0)");
   gradient.addColorStop(0.55, "rgba(0,0,0,0.55)");
@@ -66,18 +65,15 @@ async function composeAdImage(backgroundDataUrl: string, headline: string, accen
   ctx.fillStyle = gradient;
   ctx.fillRect(0, size * 0.45, size, size * 0.55);
 
-  // Accent bar above headline
   ctx.fillStyle = accent;
   ctx.fillRect(72, size * 0.60, 64, 6);
 
-  // Small "SPONSORED" kicker
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.font = "600 22px Inter, system-ui, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText("SPONSORED", 72, size * 0.60 - 16);
 
-  // Headline
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 62px Inter, system-ui, sans-serif";
   ctx.textAlign = "left";
@@ -94,58 +90,81 @@ async function composeAdImage(backgroundDataUrl: string, headline: string, accen
   return canvas.toDataURL("image/jpeg", 0.88);
 }
 
+/**
+ * Generate all posts in parallel:
+ *   Phase 1: all copy calls concurrently
+ *   Phase 2: all image calls concurrently
+ *   Phase 3: all compose calls concurrently
+ * Total time is roughly max(slowest of each phase), not sum.
+ */
 export async function generateDailyPostsAI(
   business: BusinessProfile,
   onProgress?: (p: GenerationProgress) => void,
   count = 3,
 ): Promise<GeneratedPost[]> {
-  const posts: GeneratedPost[] = [];
-  const previousTitles: string[] = [];
+  const slots = SLOTS.slice(0, count);
+  const total = slots.length;
 
-  for (let i = 0; i < count; i++) {
-    const slot = pick(SLOTS, i);
-    const channel = pick(CHANNELS, i);
+  // Phase 1: parallel copy
+  onProgress?.({ stage: "copy", completed: 0, total });
+  let copyDone = 0;
+  const copies = await Promise.all(
+    slots.map(async (slot, i) => {
+      const channel = CHANNELS[i % CHANNELS.length]!;
+      const result = await generateAdCopy({
+        data: {
+          business,
+          slot: { time: slot.time, goal: slot.goal, channel, focus: slot.focus },
+        },
+      });
+      copyDone++;
+      onProgress?.({ stage: "copy", completed: copyDone, total });
+      return result;
+    }),
+  );
 
-    onProgress?.({ index: i, total: count, stage: "copy" });
+  // Phase 2: parallel images
+  onProgress?.({ stage: "image", completed: 0, total });
+  let imgDone = 0;
+  const images = await Promise.all(
+    copies.map(async (c) => {
+      const result = await generateAdImage({ data: { prompt: c.imagePrompt, business } });
+      imgDone++;
+      onProgress?.({ stage: "image", completed: imgDone, total });
+      return result;
+    }),
+  );
 
-    const copy = await generateAdCopy({
-      data: {
-        business,
-        slot: { time: slot.time, goal: slot.goal, channel },
-        previousTitles,
-      },
-    });
+  // Phase 3: parallel compose
+  onProgress?.({ stage: "compose", completed: 0, total });
+  let composeDone = 0;
+  const finals = await Promise.all(
+    images.map(async (img, i) => {
+      let out = img.dataUrl;
+      try {
+        out = await composeAdImage(img.dataUrl, copies[i]!.title, "#6366f1");
+      } catch {
+        out = img.dataUrl;
+      }
+      composeDone++;
+      onProgress?.({ stage: "compose", completed: composeDone, total });
+      return out;
+    }),
+  );
 
-    onProgress?.({ index: i, total: count, stage: "image", title: copy.title });
+  const now = Date.now();
+  const posts: GeneratedPost[] = slots.map((slot, i) => ({
+    id: `p_${now}_${i}`,
+    image: finals[i]!,
+    bgImage: images[i]!.dataUrl,
+    title: copies[i]!.title,
+    goal: slot.goal,
+    time: slot.time,
+    channel: CHANNELS[i % CHANNELS.length]!,
+    status: "scheduled",
+    createdAt: now + i,
+  }));
 
-    const image = await generateAdImage({ data: { prompt: copy.imagePrompt } });
-
-    onProgress?.({ index: i, total: count, stage: "compose", title: copy.title });
-
-    // Overlay headline onto the AI background → looks like a real ad
-    const accent = "#6366f1"; // indigo, matches your primary
-    let finalImage = image.dataUrl;
-    try {
-      finalImage = await composeAdImage(image.dataUrl, copy.title, accent);
-    } catch {
-      // If canvas fails (e.g. SSR context), fall back to raw AI image
-      finalImage = image.dataUrl;
-    }
-
-    posts.push({
-      id: `p_${Date.now()}_${i}`,
-      image: finalImage,
-      title: copy.title,
-      goal: slot.goal,
-      time: slot.time,
-      channel,
-      status: "scheduled",
-      createdAt: Date.now() + i,
-    });
-
-    previousTitles.push(copy.title);
-    onProgress?.({ index: i, total: count, stage: "done", title: copy.title });
-  }
-
+  onProgress?.({ stage: "done", completed: total, total });
   return posts;
 }

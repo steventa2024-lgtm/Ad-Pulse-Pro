@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Sparkles, X, Loader2 } from "lucide-react";
+import { Sparkles, X, Loader2, Pencil } from "lucide-react";
 import { useAppStore, type GeneratedPost } from "@/lib/store";
-import { generateDailyPostsAI, type GenerationProgress } from "@/lib/generator";
+import { generateDailyPostsAI, composeAdImage, type GenerationProgress } from "@/lib/generator";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -21,6 +21,7 @@ function Dashboard() {
   const autopilotOn = useAppStore((s) => s.autopilotOn);
   const lastGenerationAt = useAppStore((s) => s.lastGenerationAt);
   const addPosts = useAppStore((s) => s.addPosts);
+  const updatePost = useAppStore((s) => s.updatePost);
   const toggleAutopilot = useAppStore((s) => s.toggleAutopilot);
   const setLastGenerationAt = useAppStore((s) => s.setLastGenerationAt);
   const reset = useAppStore((s) => s.reset);
@@ -29,6 +30,8 @@ function Dashboard() {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
   const autoRan = useRef(false);
 
   const connectedCount = channels.filter((c) => c.connected).length;
@@ -50,7 +53,6 @@ function Dashboard() {
     }
   };
 
-  // Auto-run once per session if we have a business and no posts
   useEffect(() => {
     if (!autoRan.current && business.name && posts.length === 0) {
       autoRan.current = true;
@@ -58,6 +60,38 @@ function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business.name, posts.length]);
+
+  const startEdit = (post: GeneratedPost) => {
+    setEditingId(post.id);
+    setDraftTitle(post.title);
+  };
+
+  const saveEdit = async (post: GeneratedPost) => {
+    const trimmed = draftTitle.trim();
+    setEditingId(null);
+    if (!trimmed || trimmed === post.title) return;
+
+    // Update title immediately
+    updatePost(post.id, { title: trimmed });
+
+    // Re-composite the flyer with the new headline
+    if (post.bgImage) {
+      try {
+        const newImage = await composeAdImage(post.bgImage, trimmed, "#6366f1");
+        updatePost(post.id, { image: newImage });
+      } catch {
+        // silently keep the old composite
+      }
+    }
+  };
+
+  const stageLabel = (p: GenerationProgress | null) => {
+    if (!p) return "Starting…";
+    if (p.stage === "copy")    return `Writing copy — ${p.completed}/${p.total}`;
+    if (p.stage === "image")   return `Rendering images — ${p.completed}/${p.total}`;
+    if (p.stage === "compose") return `Composing ads — ${p.completed}/${p.total}`;
+    return "Finishing…";
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
@@ -134,25 +168,18 @@ function Dashboard() {
             </button>
           </div>
 
-          {generating && progress && (
+          {generating && (
             <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-[12px] text-primary">
               <div className="flex items-center gap-2 font-semibold">
                 <Loader2 className="size-3.5 animate-spin" />
-                Generating post {progress.index + 1} of {progress.total} — {progress.stage === "copy" ? "writing copy" : progress.stage === "image" ? "rendering image" : progress.stage === "compose" ? "composing ad" : "saving"}
+                {stageLabel(progress)} — running in parallel
               </div>
-              {progress.title && <div className="mt-1 text-[11px] opacity-80">“{progress.title}”</div>}
             </div>
           )}
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {generating && todayPosts.length < 3 && Array.from({ length: 3 - todayPosts.length }).map((_, i) => (
-              <div key={`skeleton-${i}`} className="overflow-hidden rounded-2xl border border-border bg-card">
-                <div className="aspect-[16/10] w-full animate-pulse bg-secondary" />
-                <div className="space-y-2 p-4">
-                  <div className="h-3 w-1/2 animate-pulse rounded bg-secondary" />
-                  <div className="h-3 w-3/4 animate-pulse rounded bg-secondary" />
-                </div>
-              </div>
+            {generating && Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonCard key={`sk-${i}`} stage={progress?.stage} />
             ))}
 
             {!generating && todayPosts.length === 0 && (
@@ -161,30 +188,56 @@ function Dashboard() {
               </p>
             )}
 
-            {todayPosts.map((post) => (
-              <article key={post.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-transform hover:-translate-y-0.5">
-                <img src={post.image} alt={post.title} width={1024} height={640} loading="lazy" className="aspect-[16/10] w-full object-cover" />
-                <div className="p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-primary">{post.time}</span>
-                    <span className="text-[11px] text-muted-foreground">· {post.channel} · {post.goal}</span>
+            {!generating && todayPosts.map((post) => {
+              const isEditing = editingId === post.id;
+              return (
+                <article key={post.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-transform hover:-translate-y-0.5">
+                  <img src={post.image} alt={post.title} width={1024} height={1024} loading="lazy" className="aspect-square w-full object-cover" />
+                  <div className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-primary">{post.time}</span>
+                      <span className="text-[11px] text-muted-foreground">· {post.channel} · {post.goal}</span>
+                    </div>
+
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={draftTitle}
+                        onChange={(e) => setDraftTitle(e.target.value)}
+                        onBlur={() => saveEdit(post)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); saveEdit(post); }
+                          if (e.key === "Escape") { setEditingId(null); }
+                        }}
+                        className="mt-1.5 w-full rounded-lg border border-primary/50 bg-background px-2 py-1.5 text-[13px] font-semibold leading-snug outline-none focus:border-primary"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => startEdit(post)}
+                        className="group mt-1.5 flex w-full items-start gap-1.5 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-accent/50"
+                        title="Click to edit headline"
+                      >
+                        <span className="text-[13px] font-semibold leading-snug">{post.title}</span>
+                        <Pencil className="mt-0.5 size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      </button>
+                    )}
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success">
+                        <span className="size-1.5 rounded-full bg-success" />
+                        {autopilotOn ? "Scheduled" : "Held"}
+                      </span>
+                      <button
+                        onClick={() => setPreview(post)}
+                        className="rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent"
+                      >
+                        Preview
+                      </button>
+                    </div>
                   </div>
-                  <p className="mt-1.5 text-[13px] font-semibold leading-snug">{post.title}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success">
-                      <span className="size-1.5 rounded-full bg-success" />
-                      {autopilotOn ? "Scheduled" : "Held"}
-                    </span>
-                    <button
-                      onClick={() => setPreview(post)}
-                      className="rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent"
-                    >
-                      Preview
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -238,6 +291,31 @@ function Stat({ value, label }: { value: string; label: string }) {
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="font-display text-xl font-extrabold text-primary sm:text-2xl">{value}</div>
       <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function SkeletonCard({ stage }: { stage?: GenerationProgress["stage"] }) {
+  const label =
+    stage === "copy" ? "Writing copy…" :
+    stage === "image" ? "Rendering image…" :
+    stage === "compose" ? "Composing ad…" :
+    "Starting…";
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="relative aspect-square w-full animate-pulse bg-secondary">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-background/85 px-3 py-1.5 text-[11px] font-semibold text-primary backdrop-blur">
+            <Loader2 className="size-3.5 animate-spin" />
+            {label}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2 p-4">
+        <div className="h-3 w-1/2 animate-pulse rounded bg-secondary" />
+        <div className="h-3 w-3/4 animate-pulse rounded bg-secondary" />
+        <div className="h-3 w-1/3 animate-pulse rounded bg-secondary" />
+      </div>
     </div>
   );
 }
