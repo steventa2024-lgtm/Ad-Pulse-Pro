@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Sparkles, X, Loader2, Pencil } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAppStore, type GeneratedPost } from "@/lib/store";
 import { generateDailyPostsAI, composeAdImage, type GenerationProgress } from "@/lib/generator";
+import { useCountUp } from "@/lib/useCountUp";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -36,7 +38,6 @@ function Dashboard() {
 
   const connectedCount = channels.filter((c) => c.connected).length;
   const todayPosts = posts.slice(0, 3);
-  const postsThisWeek = posts.length || 21;
 
   const runGeneration = async () => {
     setGenerating(true);
@@ -70,18 +71,12 @@ function Dashboard() {
     const trimmed = draftTitle.trim();
     setEditingId(null);
     if (!trimmed || trimmed === post.title) return;
-
-    // Update title immediately
     updatePost(post.id, { title: trimmed });
-
-    // Re-composite the flyer with the new headline
     if (post.bgImage) {
       try {
         const newImage = await composeAdImage(post.bgImage, trimmed, "#6366f1");
         updatePost(post.id, { image: newImage });
-      } catch {
-        // silently keep the old composite
-      }
+      } catch { /* keep old composite */ }
     }
   };
 
@@ -119,13 +114,21 @@ function Dashboard() {
           </div>
         )}
 
-        <section className="reveal">
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
           <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
               <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                 autopilotOn ? "border-success/20 bg-success/10 text-success" : "border-border bg-secondary text-muted-foreground"
               }`}>
-                <span className={`size-1.5 rounded-full ${autopilotOn ? "bg-success" : "bg-muted-foreground"}`} />
+                <motion.span
+                  className={`size-1.5 rounded-full ${autopilotOn ? "bg-success" : "bg-muted-foreground"}`}
+                  animate={autopilotOn ? { scale: [1, 1.4, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 1 }}
+                  transition={autopilotOn ? { duration: 2, repeat: Infinity, ease: "easeInOut" } : {}}
+                />
                 {autopilotOn ? "Automation live" : "Automation paused"}
               </span>
               <h1 className="mt-3 font-display text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl">
@@ -137,6 +140,7 @@ function Dashboard() {
                   : "Nothing will be posted while paused. Flip the switch to resume."}
               </p>
             </div>
+
             <button
               onClick={toggleAutopilot}
               role="switch"
@@ -144,43 +148,60 @@ function Dashboard() {
               aria-label="Toggle automation"
               className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors ${autopilotOn ? "bg-success" : "bg-secondary"}`}
             >
-              <span className={`absolute size-7 rounded-full bg-background shadow transition-all ${autopilotOn ? "right-0.5" : "left-0.5"}`} />
+              <motion.span
+                className="absolute size-7 rounded-full bg-background shadow"
+                animate={{ left: autopilotOn ? 26 : 2 }}
+                transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              />
             </button>
           </div>
+        </motion.section>
+
+        <section className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
+          <AnimatedStat value={String(posts.length || 21)} label="posts this week" delay={0.05} />
+          <AnimatedStat value="14.2k" label="reach, last 7 days" delay={0.1} />
+          <AnimatedStat value="3.8%" label="click-through rate" delay={0.15} />
         </section>
 
-        <section className="reveal mt-6 grid grid-cols-3 gap-2 sm:gap-3">
-          <Stat value={String(postsThisWeek)} label="posts this week" />
-          <Stat value="14.2k" label="reach, last 7 days" />
-          <Stat value="3.8%" label="click-through rate" />
-        </section>
-
-        <section className="reveal mt-8">
+        <section className="mt-8">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-display text-lg font-bold tracking-tight">Today's flyers</h2>
-            <button
+            <motion.button
               onClick={runGeneration}
               disabled={generating}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              whileHover={{ scale: generating ? 1 : 1.03 }}
+              whileTap={{ scale: generating ? 1 : 0.97 }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
               {generating ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
               {generating ? "Generating…" : "Generate posts"}
-            </button>
+            </motion.button>
           </div>
 
-          {generating && (
-            <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-[12px] text-primary">
-              <div className="flex items-center gap-2 font-semibold">
-                <Loader2 className="size-3.5 animate-spin" />
-                {stageLabel(progress)} — running in parallel
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {generating && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 overflow-hidden"
+              >
+                <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-[12px] text-primary">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    {stageLabel(progress)} — running in parallel
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {generating && Array.from({ length: 3 }).map((_, i) => (
-              <SkeletonCard key={`sk-${i}`} stage={progress?.stage} />
-            ))}
+            <AnimatePresence mode="popLayout">
+              {generating && Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonCard key={`sk-${i}`} stage={progress?.stage} index={i} />
+              ))}
+            </AnimatePresence>
 
             {!generating && todayPosts.length === 0 && (
               <p className="col-span-full rounded-xl border border-dashed border-border bg-card/50 px-4 py-8 text-center text-[13px] text-muted-foreground">
@@ -188,10 +209,19 @@ function Dashboard() {
               </p>
             )}
 
-            {!generating && todayPosts.map((post) => {
+            {!generating && todayPosts.map((post, i) => {
               const isEditing = editingId === post.id;
               return (
-                <article key={post.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-transform hover:-translate-y-0.5">
+                <motion.article
+                  key={post.id}
+                  layout
+                  initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                  transition={{ duration: 0.4, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                  whileHover={{ y: -4 }}
+                  className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                >
                   <img src={post.image} alt={post.title} width={1024} height={1024} loading="lazy" className="aspect-square w-full object-cover" />
                   <div className="p-4">
                     <div className="flex items-center gap-2">
@@ -227,32 +257,40 @@ function Dashboard() {
                         <span className="size-1.5 rounded-full bg-success" />
                         {autopilotOn ? "Scheduled" : "Held"}
                       </span>
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setPreview(post)}
                         className="rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent"
                       >
                         Preview
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
-                </article>
+                </motion.article>
               );
             })}
           </div>
         </section>
 
-        <section className="reveal mt-8 pb-10">
+        <section className="mt-8 pb-10">
           <h2 className="font-display text-lg font-bold tracking-tight">Upcoming schedule</h2>
           <div className="mt-4 space-y-2">
-            {todayPosts.map((post) => (
-              <div key={`schedule-${post.id}`} className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
+            {todayPosts.map((post, i) => (
+              <motion.div
+                key={`schedule-${post.id}`}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35, delay: 0.1 + i * 0.05 }}
+                className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3"
+              >
                 <span className="w-16 shrink-0 text-[12px] font-bold text-primary">{post.time}</span>
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-semibold">{post.title}</p>
                   <p className="text-[11px] text-muted-foreground">{post.channel}</p>
                 </div>
                 <span className={`ml-auto size-1.5 shrink-0 rounded-full ${autopilotOn ? "bg-success" : "bg-muted-foreground"}`} />
-              </div>
+              </motion.div>
             ))}
           </div>
 
@@ -268,41 +306,69 @@ function Dashboard() {
         </section>
       </main>
 
-      {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPreview(null)}>
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setPreview(null)} className="absolute right-3 top-3 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur transition-colors hover:bg-background" aria-label="Close preview">
-              <X className="size-4" />
-            </button>
-            <img src={preview.image} alt={preview.title} className="aspect-square w-full object-cover" />
-            <div className="p-5">
-              <div className="text-[11px] font-bold text-primary">{preview.time} · {preview.channel} · {preview.goal}</div>
-              <h3 className="mt-2 font-display text-lg font-bold">{preview.title}</h3>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {preview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            onClick={() => setPreview(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => setPreview(null)} className="absolute right-3 top-3 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur transition-colors hover:bg-background" aria-label="Close preview">
+                <X className="size-4" />
+              </button>
+              <img src={preview.image} alt={preview.title} className="aspect-square w-full object-cover" />
+              <div className="p-5">
+                <div className="text-[11px] font-bold text-primary">{preview.time} · {preview.channel} · {preview.goal}</div>
+                <h3 className="mt-2 font-display text-lg font-bold">{preview.title}</h3>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function AnimatedStat({ value, label, delay = 0 }: { value: string; label: string; delay?: number }) {
+  const display = useCountUp(value);
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="font-display text-xl font-extrabold text-primary sm:text-2xl">{value}</div>
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-xl border border-border bg-card p-4"
+    >
+      <div className="font-display text-xl font-extrabold text-primary sm:text-2xl">{display}</div>
       <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{label}</div>
-    </div>
+    </motion.div>
   );
 }
 
-function SkeletonCard({ stage }: { stage?: GenerationProgress["stage"] }) {
+function SkeletonCard({ stage, index }: { stage?: GenerationProgress["stage"]; index: number }) {
   const label =
     stage === "copy" ? "Writing copy…" :
     stage === "image" ? "Rendering image…" :
     stage === "compose" ? "Composing ad…" :
     "Starting…";
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.35, delay: index * 0.05 }}
+      className="overflow-hidden rounded-2xl border border-border bg-card"
+    >
       <div className="relative aspect-square w-full animate-pulse bg-secondary">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="flex items-center gap-2 rounded-full bg-background/85 px-3 py-1.5 text-[11px] font-semibold text-primary backdrop-blur">
@@ -316,6 +382,6 @@ function SkeletonCard({ stage }: { stage?: GenerationProgress["stage"] }) {
         <div className="h-3 w-3/4 animate-pulse rounded bg-secondary" />
         <div className="h-3 w-1/3 animate-pulse rounded bg-secondary" />
       </div>
-    </div>
+    </motion.div>
   );
 }
