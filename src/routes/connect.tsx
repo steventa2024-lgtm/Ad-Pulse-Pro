@@ -1,21 +1,14 @@
-import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Check, Facebook, Instagram, Music2 } from "lucide-react";
-import { channels } from "@/lib/mock-data";
+import { useAppStore, type ChannelId } from "@/lib/store";
 
 export const Route = createFileRoute("/connect")({
   head: () => ({
     meta: [
       { title: "Connect Your Channels — Pulseboard" },
-      {
-        name: "description",
-        content: "Connect Facebook, Instagram, and TikTok so Pulseboard can post your ads on autopilot.",
-      },
+      { name: "description", content: "Connect Facebook, Instagram, and TikTok so Pulseboard can post your ads on autopilot." },
       { property: "og:title", content: "Connect Your Channels — Pulseboard" },
-      {
-        property: "og:description",
-        content: "Connect Facebook, Instagram, and TikTok so Pulseboard can post your ads on autopilot.",
-      },
+      { property: "og:description", content: "Connect Facebook, Instagram, and TikTok so Pulseboard can post your ads on autopilot." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -23,7 +16,7 @@ export const Route = createFileRoute("/connect")({
   component: Connect,
 });
 
-const channelIcons: Record<string, typeof Facebook> = {
+const channelIcons: Record<ChannelId, typeof Facebook> = {
   facebook: Facebook,
   instagram: Instagram,
   tiktok: Music2,
@@ -31,17 +24,16 @@ const channelIcons: Record<string, typeof Facebook> = {
 
 function Connect() {
   const navigate = useNavigate();
-  const [connected, setConnected] = useState<Record<string, boolean>>({});
-  const count = Object.values(connected).filter(Boolean).length;
+  const channels = useAppStore((s) => s.channels);
+  const setChannelConnected = useAppStore((s) => s.setChannelConnected);
+  const count = channels.filter((c) => c.connected).length;
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground antialiased">
       <header className="border-b border-border">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
           <Link to="/" className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">
-              P
-            </span>
+            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">P</span>
             <span className="font-display text-[15px] font-bold tracking-tight">Pulseboard</span>
           </Link>
           <span className="text-[11px] font-semibold text-muted-foreground">Final step</span>
@@ -61,13 +53,9 @@ function Connect() {
 
             <div className="mt-6 space-y-2">
               {channels.map((channel) => {
-                const Icon = channelIcons[channel.id]!;
-                const isConnected = connected[channel.id];
+                const Icon = channelIcons[channel.id];
                 return (
-                  <div
-                    key={channel.id}
-                    className="flex items-center justify-between rounded-xl border border-border bg-secondary/50 px-4 py-3.5"
-                  >
+                  <div key={channel.id} className="flex items-center justify-between rounded-xl border border-border bg-secondary/50 px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
                         <Icon className="size-4" />
@@ -77,13 +65,17 @@ function Connect() {
                         <div className="truncate text-[11.5px] text-muted-foreground">{channel.handle}</div>
                       </div>
                     </div>
-                    {isConnected ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-success/20 bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
+                    {channel.connected ? (
+                      <button
+                        onClick={() => setChannelConnected(channel.id, false)}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-success/20 bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                        title="Click to disconnect"
+                      >
                         <Check className="size-3" /> Connected
-                      </span>
+                      </button>
                     ) : (
                       <button
-                        onClick={() => setConnected((c) => ({ ...c, [channel.id]: true }))}
+                        onClick={() => setChannelConnected(channel.id, true)}
                         className="shrink-0 rounded-lg bg-primary px-3.5 py-2 text-[12px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                       >
                         Connect
