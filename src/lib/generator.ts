@@ -4,9 +4,21 @@ import { generateAdCopy, generateAdImage } from "./ai.functions";
 const CHANNELS: ChannelId[] = ["instagram", "facebook", "tiktok"];
 
 const SLOTS = [
-  { time: "9:00 AM", goal: "Engagement", focus: "Ask the audience a niche-specific question. Spark replies. Zero hard sell." },
-  { time: "1:30 PM", goal: "Conversion", focus: "Lead with the specific offer, add a deadline, end with a strong CTA." },
-  { time: "6:00 PM", goal: "Trust",    focus: "Open with a customer review, social proof, or before/after proof." },
+  {
+    time: "9:00 AM",
+    goal: "Engagement",
+    focus: "Ask the audience a niche-specific question. Spark replies. Zero hard sell.",
+  },
+  {
+    time: "1:30 PM",
+    goal: "Conversion",
+    focus: "Lead with the specific offer, add a deadline, end with a strong CTA.",
+  },
+  {
+    time: "6:00 PM",
+    goal: "Trust",
+    focus: "Open with a customer review, social proof, or before/after proof.",
+  },
 ] as const;
 
 export interface GenerationProgress {
@@ -42,7 +54,6 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-/** Composite the AI background with an ad headline overlay. Exported for re-compose on edit. */
 export async function composeAdImage(
   backgroundDataUrl: string,
   headline: string,
@@ -66,13 +77,13 @@ export async function composeAdImage(
   ctx.fillRect(0, size * 0.45, size, size * 0.55);
 
   ctx.fillStyle = accent;
-  ctx.fillRect(72, size * 0.60, 64, 6);
+  ctx.fillRect(72, size * 0.6, 64, 6);
 
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.font = "600 22px Inter, system-ui, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("SPONSORED", 72, size * 0.60 - 16);
+  ctx.fillText("SPONSORED", 72, size * 0.6 - 16);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 62px Inter, system-ui, sans-serif";
@@ -82,7 +93,7 @@ export async function composeAdImage(
   const maxWidth = size - 144;
   const lines = wrapText(ctx, headline, maxWidth);
   const lineHeight = 72;
-  const startY = size * 0.60 + 40;
+  const startY = size * 0.6 + 40;
   lines.slice(0, 4).forEach((line, i) => {
     ctx.fillText(line, 72, startY + i * lineHeight);
   });
@@ -90,32 +101,22 @@ export async function composeAdImage(
   return canvas.toDataURL("image/jpeg", 0.88);
 }
 
-/**
- * Generate all posts in parallel:
- *   Phase 1: all copy calls concurrently
- *   Phase 2: all image calls concurrently
- *   Phase 3: all compose calls concurrently
- * Total time is roughly max(slowest of each phase), not sum.
- */
 export async function generateDailyPostsAI(
   business: BusinessProfile,
   onProgress?: (p: GenerationProgress) => void,
   count = 3,
+  initialStatus: GeneratedPost["status"] = "scheduled",
 ): Promise<GeneratedPost[]> {
   const slots = SLOTS.slice(0, count);
   const total = slots.length;
 
-  // Phase 1: parallel copy
   onProgress?.({ stage: "copy", completed: 0, total });
   let copyDone = 0;
   const copies = await Promise.all(
     slots.map(async (slot, i) => {
       const channel = CHANNELS[i % CHANNELS.length]!;
       const result = await generateAdCopy({
-        data: {
-          business,
-          slot: { time: slot.time, goal: slot.goal, channel, focus: slot.focus },
-        },
+        data: { business, slot: { time: slot.time, goal: slot.goal, channel, focus: slot.focus } },
       });
       copyDone++;
       onProgress?.({ stage: "copy", completed: copyDone, total });
@@ -123,7 +124,6 @@ export async function generateDailyPostsAI(
     }),
   );
 
-  // Phase 2: parallel images
   onProgress?.({ stage: "image", completed: 0, total });
   let imgDone = 0;
   const images = await Promise.all(
@@ -135,7 +135,6 @@ export async function generateDailyPostsAI(
     }),
   );
 
-  // Phase 3: parallel compose
   onProgress?.({ stage: "compose", completed: 0, total });
   let composeDone = 0;
   const finals = await Promise.all(
@@ -161,7 +160,7 @@ export async function generateDailyPostsAI(
     goal: slot.goal,
     time: slot.time,
     channel: CHANNELS[i % CHANNELS.length]!,
-    status: "scheduled",
+    status: initialStatus,
     createdAt: now + i,
   }));
 

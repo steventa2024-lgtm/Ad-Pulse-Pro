@@ -11,7 +11,10 @@ export function useCountUp(value: string, duration = 900): string {
   useEffect(() => {
     // Parse numeric part + suffix
     const match = value.match(/^([\d.]+)(.*)$/);
-    if (!match) { setDisplay(value); return; }
+    if (!match) {
+      setDisplay(value);
+      return;
+    }
 
     const target = parseFloat(match[1]!);
     const suffix = match[2] ?? "";
@@ -28,7 +31,9 @@ export function useCountUp(value: string, duration = 900): string {
     };
 
     raf.current = requestAnimationFrame(tick);
-    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
   }, [value, duration]);
 
   return display;

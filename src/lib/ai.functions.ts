@@ -67,7 +67,9 @@ Return STRICT JSON only:
     const parsed = JSON.parse(raw) as { title?: string; imagePrompt?: string };
     return {
       title: parsed.title ?? "Untitled ad",
-      imagePrompt: parsed.imagePrompt ?? `vibrant, modern, eye-catching scene related to ${business.niche || "the product"}`,
+      imagePrompt:
+        parsed.imagePrompt ??
+        `vibrant, modern, eye-catching scene related to ${business.niche || "the product"}`,
     };
   });
 

@@ -2,16 +2,13 @@ import { useEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-// Register once on the client
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
 interface RevealProps {
   children: ReactNode;
-  /** Stagger delay in seconds */
   delay?: number;
-  /** Distance to travel in px */
   y?: number;
   className?: string;
   as?: "div" | "section";
@@ -22,8 +19,14 @@ export function Reveal({ children, delay = 0, y = 24, className, as = "div" }: R
 
   useEffect(() => {
     if (typeof window === "undefined" || !ref.current) return;
-
     const el = ref.current;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      gsap.set(el, { autoAlpha: 1, y: 0 });
+      return;
+    }
+
     const ctx = gsap.context(() => {
       gsap.fromTo(
         el,
@@ -31,14 +34,16 @@ export function Reveal({ children, delay = 0, y = 24, className, as = "div" }: R
         {
           autoAlpha: 1,
           y: 0,
-          duration: 0.75,
+          duration: 0.7,
           delay,
           ease: "power3.out",
           scrollTrigger: {
             trigger: el,
             start: "top 88%",
-            toggleActions: "play none none none",
-            once: true,
+            end: "bottom 12%",
+            // play on enter, reset when leaving upward so it replays
+            toggleActions: "play none none reset",
+            invalidateOnRefresh: true,
           },
         },
       );

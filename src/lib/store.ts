@@ -22,8 +22,8 @@ export interface BusinessProfile {
 
 export interface GeneratedPost {
   id: string;
-  image: string;         // composited image (text overlay)
-  bgImage?: string;      // raw AI background, kept for re-compositing on edit
+  image: string; // composited image (text overlay)
+  bgImage?: string; // raw AI background, kept for re-compositing on edit
   title: string;
   goal: string;
   time: string;
@@ -61,8 +61,12 @@ interface AppState {
 
 const idbStorage = createJSONStorage(() => ({
   getItem: async (name: string) => (await get(name)) ?? null,
-  setItem: async (name: string, value: string) => { await set(name, value); },
-  removeItem: async (name: string) => { await del(name); },
+  setItem: async (name: string, value: string) => {
+    await set(name, value);
+  },
+  removeItem: async (name: string) => {
+    await del(name);
+  },
 }));
 
 export const useAppStore = create<AppState>()(
@@ -83,7 +87,12 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           channels: s.channels.map((c) =>
             c.id === id
-              ? { ...c, connected, handle: handle ?? c.handle, connectedAt: connected ? Date.now() : undefined }
+              ? {
+                  ...c,
+                  connected,
+                  handle: handle ?? c.handle,
+                  connectedAt: connected ? Date.now() : undefined,
+                }
               : c,
           ),
         })),

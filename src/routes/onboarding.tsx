@@ -5,10 +5,18 @@ import { useAppStore, type BusinessProfile } from "@/lib/store";
 export const Route = createFileRoute("/onboarding")({
   head: () => ({
     meta: [
-      { title: "Set Up Your Brand — Pulseboard" },
-      { name: "description", content: "Tell Pulseboard about your business in five quick steps and start automating your ads." },
-      { property: "og:title", content: "Set Up Your Brand — Pulseboard" },
-      { property: "og:description", content: "Tell Pulseboard about your business in five quick steps and start automating your ads." },
+      { title: "Set Up Your Brand — Ad Pilot Pro" },
+      {
+        name: "description",
+        content:
+          "Tell Ad Pilot Pro about your business in five quick steps and start automating your ads.",
+      },
+      { property: "og:title", content: "Set Up Your Brand — Ad Pilot Pro" },
+      {
+        property: "og:description",
+        content:
+          "Tell Ad Pilot Pro about your business in five quick steps and start automating your ads.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -25,11 +33,39 @@ interface StepDef {
 }
 
 const steps: StepDef[] = [
-  { key: "name", title: "What's your business name?", hint: "This appears on your generated flyers.", placeholder: "e.g. Glow & Co." },
-  { key: "niche", title: "What niche are you in?", hint: "Skincare, fitness coaching, coffee roasting…", placeholder: "e.g. Natural skincare" },
-  { key: "audience", title: "Who is your target audience?", hint: "Describe the people you want to reach.", placeholder: "e.g. Women 25–40 who care about clean ingredients", multiline: true },
-  { key: "offer", title: "What's your current offer?", hint: "The promotion or product you're pushing right now.", placeholder: "e.g. 20% off the weekend essentials bundle", multiline: true },
-  { key: "tone", title: "Describe your brand style", hint: "Tone, colors, vibe — how should your ads feel?", placeholder: "e.g. Minimal, warm, premium; deep indigo and cream", multiline: true },
+  {
+    key: "name",
+    title: "What's your business name?",
+    hint: "This appears on your generated flyers.",
+    placeholder: "e.g. Glow & Co.",
+  },
+  {
+    key: "niche",
+    title: "What niche are you in?",
+    hint: "Skincare, fitness coaching, coffee roasting…",
+    placeholder: "e.g. Natural skincare",
+  },
+  {
+    key: "audience",
+    title: "Who is your target audience?",
+    hint: "Describe the people you want to reach.",
+    placeholder: "e.g. Women 25–40 who care about clean ingredients",
+    multiline: true,
+  },
+  {
+    key: "offer",
+    title: "What's your current offer?",
+    hint: "The promotion or product you're pushing right now.",
+    placeholder: "e.g. 20% off the weekend essentials bundle",
+    multiline: true,
+  },
+  {
+    key: "tone",
+    title: "Describe your brand style",
+    hint: "Tone, colors, vibe — how should your ads feel?",
+    placeholder: "e.g. Minimal, warm, premium; deep indigo and cream",
+    multiline: true,
+  },
 ];
 
 function Onboarding() {
@@ -60,10 +96,14 @@ function Onboarding() {
       <header className="border-b border-border">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
           <Link to="/" className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">P</span>
-            <span className="font-display text-[15px] font-bold tracking-tight">Pulseboard</span>
+            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">
+              P
+            </span>
+            <span className="font-display text-[15px] font-bold tracking-tight">Ad Pilot Pro</span>
           </Link>
-          <span className="text-[11px] font-semibold text-muted-foreground">Step {idx + 1} of {steps.length}</span>
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            Step {idx + 1} of {steps.length}
+          </span>
         </div>
       </header>
 
@@ -71,7 +111,10 @@ function Onboarding() {
         <div className="w-full max-w-md reveal" key={idx}>
           <div className="mb-6 flex gap-1.5">
             {steps.map((s, i) => (
-              <span key={s.key} className={`h-1 flex-1 rounded-full ${i <= idx ? "bg-primary" : "bg-secondary"}`} />
+              <span
+                key={s.key}
+                className={`h-1 flex-1 rounded-full ${i <= idx ? "bg-primary" : "bg-secondary"}`}
+              />
             ))}
           </div>
 
@@ -92,7 +135,9 @@ function Onboarding() {
               <input
                 value={value}
                 onChange={(e) => updateBusiness({ [current.key]: e.target.value })}
-                onKeyDown={(e) => { if (e.key === "Enter" && canContinue) next(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canContinue) next();
+                }}
                 placeholder={current.placeholder}
                 autoFocus
                 className="mt-5 h-12 w-full rounded-xl border border-input bg-background px-4 text-[14px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
